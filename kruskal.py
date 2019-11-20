@@ -159,6 +159,12 @@ class SpanningBranch:
         else:
             self.connections = connections
 
+    def merge(self, other):
+        if not isinstance(other, SpanningBranch):
+            raise TypeError("A SpanningBranch can only be merged with another SpanningBranch")
+        for c in other.connections:
+            self.connections.append(c)
+
     def __repr__(self):
         rep_str = ''
         for c in self.connections:
@@ -166,11 +172,6 @@ class SpanningBranch:
 
         return rep_str
 
-    def merge(self, other):
-        if not isinstance(other, SpanningBranch):
-            raise TypeError("A SpanningBranch can only be merged with another SpanningBranch")
-        for c in other.connections:
-            self.connections.append(c)
 
     @property
     def vertexes(self):
@@ -194,20 +195,28 @@ class Kruskal:
         self.spanning_tree = SpanningTree()
         self.ordered_connections = []
 
+    def order_list(self):
+        self.ordered_connections = sorted(self.graph.connections,
+                                          key=lambda c: c.weight)
+
     def solve(self) -> SpanningTree:
         if not self.graph.vertexes or len(self.graph.vertexes) <= 0:
-            raise ValueError("No graph found. Use Kruskal.graph.add_vertex() and Kruskal.graph.add_edge() to get started")
+            raise ValueError("No graph found. Use Kruskal.graph.add_vertex() / Kruskal.graph.add_edge() to get started")
 
         # Weight ordering
         if not self.ordered_connections:
-            self.order_list()
+            self.order_list()   # This might be a bottleneck in big problems...
 
-        spanning_branches = []
-        for c in self.ordered_connections:
-            # TODO: Stop when MST is completed (connections = nodes-1)
-
-            # New SpanningBranch
+        spanning_branches = []  # Variable to hold disconnected branches
+        for c in self.ordered_connections:  # For each connection
+            """
+                # If you want to stop whenever the minimum spanning tree length is completed
+                if len(spanning_branches) == len(self.graph.vertexes) - 1:
+                    break
+            """
+            # If node 1 and node 2 were not visited
             if not c.vertex_one.has_visited and not c.vertex_two.has_visited:
+                # Creates a new SpanningBranch
                 branch = SpanningBranch(branch_id=len(spanning_branches), connections=[c])
                 spanning_branches.append(branch)
                 c.has_chosen = True
@@ -215,15 +224,20 @@ class Kruskal:
                 c.vertex_two.has_visited = True
 
             # Connecting unvisited node to a branch
-            elif (not c.vertex_one.has_visited and c.vertex_two.has_visited) or (not c.vertex_two.has_visited and c.vertex_one.has_visited):
+            elif (not c.vertex_one.has_visited and c.vertex_two.has_visited) \
+                    or (not c.vertex_two.has_visited and c.vertex_one.has_visited):
 
+                vertex_visited = None   # See which vertex has been visited
                 if c.vertex_one.has_visited:
                     vertex_visited = c.vertex_one
                 else:
                     vertex_visited = c.vertex_two
 
+                # For each existing spanning branch
                 for b in spanning_branches:
+                    # Find where the visited vertex is
                     if vertex_visited in b.vertexes:
+                        # Insert the non visited vertex into the visited vertex SpanningBranch
                         c.has_chosen = True
                         c.vertex_one.has_visited = True
                         c.vertex_two.has_visited = True
@@ -233,28 +247,30 @@ class Kruskal:
             # Cycle detection
             elif c.vertex_one.has_visited and c.vertex_two.has_visited:
                 vertex_one_branch = None
+                # Finds vertex one branch
                 for index1, b in enumerate(spanning_branches):
                     if c.vertex_one in b.vertexes:
                         vertex_one_branch = b
                         break
 
                 vertex_two_branch = None
+                # Finds vertex two branch
                 for index2, b in enumerate(spanning_branches):
                     if c.vertex_two in b.vertexes:
                         vertex_two_branch = b
                         break
 
-                if vertex_one_branch.id == vertex_two_branch.id:
-                    continue
-                else:
+                # If they are not on the same branch
+                if vertex_one_branch.id != vertex_two_branch.id:
+                    # Gets the branch with minimum id
                     if vertex_two_branch.id < vertex_one_branch.id:
                         root_branch = vertex_two_branch
                         merge_branch = vertex_one_branch
-
                     else:
                         root_branch = vertex_one_branch
                         merge_branch = vertex_two_branch
 
+                    # Merge branches and insert connection on the merged branch
                     c.has_chosen = True
                     c.vertex_one.has_visited = True
                     c.vertex_two.has_visited = True
@@ -271,44 +287,28 @@ class Kruskal:
         self.spanning_tree = SpanningTree(connections=spanning_branches[0].connections)
         return self.spanning_tree
 
-    @property
-    def search_connections(self):
-        avaiable_connections = []
-        for c in self.graph.connections:
-            if c.has_chosen:
-                continue
-            if (c.vertex_one.has_visited and not c.vertex_two.has_visited) or (
-                    c.vertex_two.has_visited and not c.vertex_one.has_visited):
-                avaiable_connections.append(c)
-
-        return avaiable_connections
-
-    def order_list(self):
-        self.ordered_connections = sorted(self.graph.connections, key=lambda c: c.weight)
-
 
 if __name__ == '__main__':
     """ Example on how to setup and run the Kruskal's algorithm """
     # Initiates an instance of Kruskal's class
     k = Kruskal()
     # Add vertexes with any custom Label
-    k.graph.add_vertexes(['A', 'B', 'C', 'D', 'E', 'F', 'G'])
+    k.graph.add_vertexes(['A', 'B', 'C', 'D', 'E'])
     # Adds connections between the vertexes. Labels must match with already added vertexes
     k.graph.add_connections([
-        ('A', 7, 'B'),
-        ('A', 5, 'D'),
-        ('B', 8, 'C'),
-        ('B', 7, 'E'),
-        ('B', 9, 'D'),
-        ('C', 5, 'E'),
-        ('D', 15, 'E'),
-        ('D', 6, 'F'),
-        ('E', 8, 'F'),
-        ('E', 9, 'G'),
-        ('F', 11, 'G')
+        ('A', 3, 'B'),
+        ('A', 1, 'E'),
+        ('B', 5, 'C'),
+        ('B', 4, 'E'),
+        ('C', 6, 'E'),
+        ('C', 2, 'D'),
+        ('D', 7, 'E')
     ])
 
     # Solves and returns a SpanningTree object, with all the information stored inside it
     minimum_spanning_tree = k.solve()
     print(minimum_spanning_tree)
+
+
+
 
